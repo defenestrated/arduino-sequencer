@@ -1,33 +1,33 @@
 /*
 
-code by sam galison, summer of 2015
-This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
+  code by sam galison, summer of 2015
+  This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
 
-NOTES:
-this code uses timer1, which controls pwm on pins 11 & 12, so don't use those pins
+  NOTES:
+  this code uses timer1, which controls pwm on pins 11 & 12, so don't use those pins
 
-hardware: LED on pin 13
+  hardware: LED on pin 13
 
-references:
+  references:
 
-AVR timer datasheet:
-http://www.atmel.com/Images/doc2505.pdf
+  AVR timer datasheet:
+  http://www.atmel.com/Images/doc2505.pdf
 
-good tutorial:
-https://arduinodiy.wordpress.com/2012/02/28/timer-interrupts/
+  good tutorial:
+  https://arduinodiy.wordpress.com/2012/02/28/timer-interrupts/
 
-timer calculator + reference:
-https://docs.google.com/spreadsheets/d/1Kq19yXfzRZ7rHQM-4t8iTiXk9fSxJ60MgJrKHpM9SC4/pubhtml?gid=956017403&single=true
+  timer calculator + reference:
+  https://docs.google.com/spreadsheets/d/1Kq19yXfzRZ7rHQM-4t8iTiXk9fSxJ60MgJrKHpM9SC4/pubhtml?gid=956017403&single=true
 
-tempo 120, 64th notes
-3/4 time
+  tempo 120, 64th notes
+  3/4 time
 
-counts per subdiv: 15624
-prescale: 8 // 0	1	0
-subdivs per beat	16
-beats per bar	3
+  counts per subdiv: 15624
+  prescale: 8 // 0	1	0
+  subdivs per beat	16
+  beats per bar	3
 
-"measure" is my terminology for the cycle
+  "measure" is my terminology for the cycle
 
 */
 
@@ -54,7 +54,8 @@ int ctk = 1, ptk = 0;
 float amplitude = 0,
   decaySpeed = 0.01;
 
-int[6] LEDs = {3, 5, 7, 8, 9, 13};
+int LEDs[] =      {3, 5, 7, 8, 9, 13};
+int ledStates[] = {0, 0, 0, 0, 0, 0};
 
 
 void setup()
@@ -88,7 +89,7 @@ void setup()
 }
 
 /* ISR(TIMER1_OVF_vect)        // overflow ISR
-/* { */
+   /* { */
 /*   /\* TCNT1 = 3035;            // preload timer *\/ */
 /*   state = !state; */
 /*   digitalWrite(ledPin, state); */
@@ -96,36 +97,38 @@ void setup()
 
 ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
 
-  newtick = true;
+  newtick = true  ;
 
   if (ticks < subdivsPerBeat) ticks ++;
   else {
+    ticks = 1;
     // new beat
     newbeat = true;
+    ledStates[3] = !ledStates[3];
+
     if (beats < beatsPerBar) beats ++;
     else {
+      beats = 1;
       // new bar
       newbar = true;
+      ledStates[5] = !ledStates[5];
+
       if (bars < barsPerMeasure) bars ++;
       else {
-         // new measure (cycle resets)
+        // new measure (cycle resets)
         newmeasure = true;
+        ledStates[4] = !ledStates[4];
         bars = 1;
-      beats = 1;
+      }
     }
-    ticks = 1;
   }
-  /* digitalWrite(ledPin, state); */
 }
 
 
 void loop() {
 
-  if(newbeat) amplitude = 1;
+  for (int i = 0; i < 6; i++) {
+    digitalWrite(LEDs[i], ledStates[i]*255);
+  }
 
-
-  newtick = false;
-  newbeat = false;
-  newbar = false;
-  newmeasure = false;
 }
