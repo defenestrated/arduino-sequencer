@@ -30,32 +30,36 @@
   "measure" is my terminology for the cycle
 
 */
+#include <Beatkeeper.h>
 
+using namespace std;
 
-volatile int state = LOW;
+#define size( x )  ( sizeof( x ) / sizeof( *x ) )
+
+boolean debug = true; // set false to disable serial
+
 
 boolean newtick = true,
-  newbeat = true,
-  newbar = true,
-  newmeasure = true;
+        newbeat = true,
+        newbar = true,
+        newmeasure = true;
 
 int previousState = LOW,
-  subdivisions = 64,
-  subdivsPerBeat = 16,
-  beatsPerBar = 3,
-  barsPerMeasure = 4,
-  ticks = 1,
-  beats = 1,
-  bars = 1
-  ;
+    subdivisions = 64,
+    subdivsPerBeat = 16,
+    beatsPerBar = 3,
+    barsPerMeasure = 4
+                     ;
 
-int ctk = 1, ptk = 0;
+volatile int ticks = 1, // these change in timer routines
+             beats = 1,
+             bars = 1
+                    ;
 
-float amplitude = 0,
-  decaySpeed = 0.01;
+int LEDs[] =      {3, 5, 7, 8, 9, 13}; // pins that the leds are on
 
-int LEDs[] =      {3, 5, 7, 8, 9, 13};
-int ledStates[] = {0, 0, 0, 0, 0, 0};
+Pattern p1 = Pattern();
+Pattern p2 = Pattern();
 
 
 void setup()
@@ -64,6 +68,95 @@ void setup()
     pinMode(LEDs[i], OUTPUT);
   }
 
+  setupTimer();
+
+
+  if (debug) {
+    Serial.begin(9600);
+
+    /* Serial.println(p1.print()); */
+
+    int n = size(LEDs);
+    Serial.println("--- setup ---");
+    Serial.print(n);
+    Serial.print(" LEDs on pins ");
+    for (int j = 0; j < n; j++) {
+      Serial.print(LEDs[j]);
+      if (j < n - 1) Serial.print(", ");
+    }
+    Serial.println();
+    p1.set(LEDs[5], String("100000"));
+    p2.set(LEDs[4], String("101010"));
+  }
+
+
+}
+
+/* ISR(TIMER1_OVF_vect)        // overflow ISR
+   /* { */
+/*   /\* TCNT1 = 3035;            // preload timer *\/ */
+/*   state = !state; */
+/*   digitalWrite(ledPin, state); */
+/* } */
+
+ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
+
+  newtick = true  ;
+
+  if (ticks < subdivsPerBeat) ticks ++;
+  else {
+    ticks = 1;
+    // new beat
+    newbeat = true;
+    beat();
+
+    if (beats < beatsPerBar) beats ++;
+    else {
+      beats = 1;
+      // new bar
+      newbar = true;
+      bar();
+
+      if (bars < barsPerMeasure) bars ++;
+      else {
+        // new measure (cycle resets)
+        newmeasure = true;
+        measure();
+        bars = 1;
+      }
+    }
+  }
+}
+
+
+void loop() {
+
+  /* for (int i = 0; i < 6; i++) { */
+  /* digitalWrite(LEDs[i], ledStates[i]*255); */
+  /* } */
+
+}
+
+void beat() {
+
+  p1.display();
+  p1.advance();
+  p2.display();
+  p2.advance();
+
+}
+
+void bar() {
+
+
+}
+
+void measure() {
+
+
+}
+
+void setupTimer() {
   // initialize timer1
   noInterrupts();           // disable all interrupts
   TCCR1A = 0;
@@ -84,51 +177,4 @@ void setup()
   OCR1A = 15624; // desired match to compare against (counts per note subdivision)
 
   interrupts();             // enable all interrupts
-
-  Serial.begin(9600);
-}
-
-/* ISR(TIMER1_OVF_vect)        // overflow ISR
-   /* { */
-/*   /\* TCNT1 = 3035;            // preload timer *\/ */
-/*   state = !state; */
-/*   digitalWrite(ledPin, state); */
-/* } */
-
-ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
-
-  newtick = true  ;
-
-  if (ticks < subdivsPerBeat) ticks ++;
-  else {
-    ticks = 1;
-    // new beat
-    newbeat = true;
-    ledStates[3] = !ledStates[3];
-
-    if (beats < beatsPerBar) beats ++;
-    else {
-      beats = 1;
-      // new bar
-      newbar = true;
-      ledStates[5] = !ledStates[5];
-
-      if (bars < barsPerMeasure) bars ++;
-      else {
-        // new measure (cycle resets)
-        newmeasure = true;
-        ledStates[4] = !ledStates[4];
-        bars = 1;
-      }
-    }
-  }
-}
-
-
-void loop() {
-
-  for (int i = 0; i < 6; i++) {
-    digitalWrite(LEDs[i], ledStates[i]*255);
-  }
-
 }
