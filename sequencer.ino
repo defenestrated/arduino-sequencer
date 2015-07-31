@@ -6,8 +6,6 @@
   NOTES:
   this code uses timer1, which controls pwm on pins 11 & 12, so don't use those pins
 
-  hardware: LED on pin 13
-
   references:
 
   AVR timer datasheet:
@@ -46,7 +44,7 @@ boolean newtick = true,
 
 int previousState = LOW,
     subdivisions = 64,
-    subdivsPerBeat = 16,
+    subdivsPerBeat = 64,
     beatsPerBar = 3,
     barsPerMeasure = 4
                      ;
@@ -58,8 +56,7 @@ volatile int ticks = 1, // these change in timer routines
 
 int LEDs[] =      {3, 5, 7, 8, 9, 13}; // pins that the leds are on
 
-Pattern p1 = Pattern();
-Pattern p2 = Pattern();
+Pattern patterns[6];
 
 
 void setup()
@@ -74,8 +71,6 @@ void setup()
   if (debug) {
     Serial.begin(9600);
 
-    /* Serial.println(p1.print()); */
-
     int n = size(LEDs);
     Serial.println("--- setup ---");
     Serial.print(n);
@@ -85,8 +80,17 @@ void setup()
       if (j < n - 1) Serial.print(", ");
     }
     Serial.println();
-    p1.set(LEDs[5], String("100000"));
-    p2.set(LEDs[4], String("101010"));
+    Serial.print(size(patterns));
+    Serial.println(" patterns total");
+    patterns[0].set(LEDs[0], String("10000000"));
+    patterns[1].set(LEDs[1], String("000"));
+    patterns[2].set(LEDs[2], String("000"));
+    patterns[3].set(LEDs[3], String("000"));
+    patterns[4].set(LEDs[4], String("1000"));
+    patterns[5].set(LEDs[5], String("10"));
+
+
+
   }
 
 
@@ -103,7 +107,10 @@ ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
 
   newtick = true  ;
 
-  if (ticks < subdivsPerBeat) ticks ++;
+  if (ticks < subdivsPerBeat) {
+    ticks ++;
+    subdiv();
+  }
   else {
     ticks = 1;
     // new beat
@@ -118,7 +125,7 @@ ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
       bar();
 
       if (bars < barsPerMeasure) bars ++;
-      else {
+       else {
         // new measure (cycle resets)
         newmeasure = true;
         measure();
@@ -136,13 +143,16 @@ void loop() {
   /* } */
 
 }
+void subdiv() {
+
+}
 
 void beat() {
 
-  p1.display();
-  p1.advance();
-  p2.display();
-  p2.advance();
+  for (int p = 0; p < size(patterns); p++) {
+    patterns[p].display();
+    patterns[p].advance();
+ }
 
 }
 
