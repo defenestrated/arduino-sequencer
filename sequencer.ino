@@ -34,18 +34,18 @@ using namespace std;
 
 #define size( x )  ( sizeof( x ) / sizeof( *x ) )
 
-boolean debug = true; // set false to disable serial
+boolean debug = true; // set true to enable verbose serial output
 
-const int smoothing = 5;
+const int medianSampleSize = 5; // size of the median filter sample
+const int senseMinimum = 100; // minimum threshhold for sensing a person (unused as of yet)
 
 boolean newtick = true,
   newbeat = true,
   newbar = true,
   newmeasure = true;
 
-int previousState = LOW,
-  subdivisions = 64,
-  subdivsPerBeat = 64,
+int subdivisions = 64,
+  subdivsPerBeat = 64, // change this to quick-and-dirty change the "tempo"
   beatsPerBar = 3,
   barsPerMeasure = 4
   ;
@@ -57,29 +57,30 @@ volatile int ticks = 1, // these change in timer routines
 
 int LEDs[] = {3, 5, 7, 8, 9, 13}; // pins that the leds are on
 
-int sensors[] = {A0};
-int proximities[size(sensors)];
+int sensors[] = {A0, A1, A2}; // pins that the sensors are on
 
-Pattern patterns[6];
+
+int proximities[size(sensors)]; // array of groomed sensor readings
+
+Pattern patterns[6]; // array of "pattern" objects (defined in Beatkeeper.cpp)
 
 
 void setup()
 {
   for (int i = 0; i < size(LEDs); i++) {
-    pinMode(LEDs[i], OUTPUT);
+    pinMode(LEDs[i], OUTPUT); // cycle through all LED pins and set to output
   }
 
   for (int i = 0; i < size(sensors); i++) {
-    pinMode(sensors[i], INPUT);
+    pinMode(sensors[i], INPUT); // cycle through all sensor pins and set to input
   }
 
-  setupTimer();
+  setupTimer(); // do all the gross internal timer stuff
 
   Serial.begin(9600);
 
   if (debug) {
-
-
+    // print out some data about the current setup
     int n = size(LEDs);
     Serial.println("--- setup ---");
     Serial.print(n);
@@ -91,6 +92,15 @@ void setup()
     Serial.println();
     Serial.print(size(patterns));
     Serial.println(" patterns total");
+
+
+    // to set a new pattern, the syntax is:
+    // patterns[<pattern number>].set(<which LED>, String("<pattern>"))
+
+    // right now it's only on/off -- we'll have to build out functionality for fades.
+    // my thought is that we can do something like "if it's 1, start fading up"
+    // and the rate would be based on beat fractions, so increment x every beat until you hit max
+
     patterns[0].set(LEDs[0], String("10000000"));
     patterns[1].set(LEDs[1], String("01"));
     patterns[2].set(LEDs[2], String("000010000"));
@@ -114,7 +124,11 @@ void setup()
 
 ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
 
-  newtick = true  ;
+  /* don't add stuff directly to here,
+     use the functions it calls, like subdiv(), beat(), or bar(),
+     defined below */
+
+  newtick = true;
 
   if (ticks < subdivsPerBeat) {
     ticks ++;
@@ -147,18 +161,55 @@ ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
 
 void loop() {
 
-  readsensors();
+  readsensors(); // do all the sensor reading + pruning
+
   for (int i = 0; i < size(sensors); i++) {
+    // cycle through all sensors and do stuff
+    // pruned data is in proximities[i]
+
+    // if you want to use only one sensor, do proximities[0] or proximities[1], etc.
+    // just don't go over the array limit (e.g. if there are 3 sensors, don't do proximities[3])
+
     /* Serial.print(proximities[i]); */
-    /* Serial.print('\t'); */
+    /* Serial.print("\t"); */
   }
   /* Serial.println(); */
 
 }
 
+void subdiv() {
+  // called every subdivision (as of now it's every 64th note)
+
+}
+
+void beat() {
+  // called every beat
+
+  for (int p = 0; p < size(patterns); p++) {
+    // cycle through all patterns
+    patterns[p].display(); // display them
+    patterns[p].advance(); // advance that pattern to its next position
+  }
+
+}
+
+void bar() {
+  // called every bar
+
+}
+
+void measure() {
+  // called every measure
+
+}
+
+
+
+
+
 void readsensors() {
-  float singles[smoothing][size(sensors)];
-  float deviations[smoothing][size(sensors)];
+  float singles[medianSampleSize][size(sensors)];
+  float deviations[medianSampleSize][size(sensors)];
   float sum, sumDeviation, avg, avgDeviation;
 
   /* for each sensor */
@@ -169,15 +220,15 @@ void readsensors() {
       Serial.print("\t");
     }
 
-    /* gather a bunch of readings, count determined by "smoothing" variable */
-    for (int x = 0; x < smoothing; x++) {
+    /* gather a bunch of readings, count determined by "medianSampleSize" variable */
+    for (int x = 0; x < medianSampleSize; x++) {
       /* put reading into "singles" array -- raw data */
       /* x is reading counter, y is sensor counter  */
       singles[x][y] = analogRead(sensors[y]);
 
       if (debug) {
         Serial.print(singles[x][y]);
-        if(x < smoothing-1) Serial.print("\t");
+        if(x < medianSampleSize-1) Serial.print("\t");
       }
 
       if (x == 0) sum = 0; // reset summation
@@ -185,11 +236,11 @@ void readsensors() {
       // median filter
       sum += singles[x][y];
 
-      if (x == smoothing-1) { // once we're at last value
+      if (x == medianSampleSize-1) { // once we're at last value
 
         if (debug) {Serial.print("\n");}
 
-        avg = sum / smoothing; // get average
+        avg = sum / medianSampleSize; // get average
 
         /* if (debug) { */
         /*   Serial.print("avg: "); */
@@ -198,7 +249,7 @@ void readsensors() {
 
 
         if (debug) {Serial.print("devs:\t");}
-        for (int read = 0; read < smoothing; read++) {
+        for (int read = 0; read < medianSampleSize; read++) {
           if (read == 0) sumDeviation = 0; // reset sum to begin
 
           deviations[read][y] = abs(singles[read][y] - avg); // deviation of this sample
@@ -211,8 +262,8 @@ void readsensors() {
 
           sumDeviation += deviations[read][y];
 
-          if (read == smoothing - 1) {
-            avgDeviation = sumDeviation / smoothing; // get avg deviation
+          if (read == medianSampleSize - 1) {
+            avgDeviation = sumDeviation / medianSampleSize; // get avg deviation
             if (debug) {
               Serial.print("\tavgDev: ");
               Serial.print(avgDeviation);
@@ -222,7 +273,7 @@ void readsensors() {
 
             if (debug) {Serial.print("\ngood:\t");}
 
-            for (int fr = 0; fr < smoothing; fr++) {
+            for (int fr = 0; fr < medianSampleSize; fr++) {
               if( deviations[fr][y] < avgDeviation ){
                 goodcount++;
                 goodsum += singles[fr][y];
@@ -236,7 +287,11 @@ void readsensors() {
             }
 
             goodavg = goodsum / goodcount;
-            proximities[y] = goodavg;
+            if (goodavg > 0) {
+              proximities[y] = goodavg;
+              if (goodavg > senseMinimum) foundHuman[y] = true;
+              else foundHuman[y] = false;
+            }
 
             if (debug) {
               Serial.print("\nFINAL: ");
@@ -258,30 +313,6 @@ void readsensors() {
 
 }
 
-
-
-void subdiv() {
-
-}
-
-void beat() {
-
-  for (int p = 0; p < size(patterns); p++) {
-    patterns[p].display();
-    patterns[p].advance();
-  }
-
-}
-
-void bar() {
-
-
-}
-
-void measure() {
-
-
-}
 
 void setupTimer() {
   // initialize timer1
