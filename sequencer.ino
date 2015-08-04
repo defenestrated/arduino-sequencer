@@ -30,8 +30,6 @@
 */
 #include <Beatkeeper.h>
 
-using namespace std;
-
 #define size( x )  ( sizeof( x ) / sizeof( *x ) )
 
 boolean debug = true; // set true to enable verbose serial output
@@ -64,6 +62,7 @@ int proximities[size(sensors)]; // array of groomed sensor readings
 int foundHuman[size(sensors)]; // array of binary is-there-a-human switches
 
 Pattern patterns[6]; // array of "pattern" objects (defined in Beatkeeper.cpp)
+// this determines how many patterns you want
 
 
 void setup()
@@ -102,12 +101,12 @@ void setup()
     // my thought is that we can do something like "if it's 1, start fading up"
     // and the rate would be based on beat fractions, so increment x every beat until you hit max
 
-    patterns[0].set(LEDs[0], String("10000000"));
-    patterns[1].set(LEDs[1], String("01"));
-    patterns[2].set(LEDs[2], String("000010000"));
-    patterns[3].set(LEDs[3], String("100"));
-    patterns[4].set(LEDs[4], String("1000"));
-    patterns[5].set(LEDs[5], String("10"));
+    patterns[0].set(LEDs[5], String("10000000"));
+    patterns[1].set(LEDs[4], String("01"));
+    patterns[2].set(LEDs[0], String("000010000"));
+    patterns[3].set(LEDs[3], String("0"));
+    patterns[4].set(LEDs[4], String("0"));
+    patterns[5].set(LEDs[5], String("0"));
 
 
 
