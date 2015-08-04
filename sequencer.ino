@@ -61,6 +61,7 @@ int sensors[] = {A0, A1, A2}; // pins that the sensors are on
 
 
 int proximities[size(sensors)]; // array of groomed sensor readings
+int foundHuman[size(sensors)]; // array of binary is-there-a-human switches
 
 Pattern patterns[6]; // array of "pattern" objects (defined in Beatkeeper.cpp)
 
