@@ -36,40 +36,49 @@ using namespace std;
 
 boolean debug = true; // set false to disable serial
 
+const int smoothing = 5;
 
 boolean newtick = true,
-        newbeat = true,
-        newbar = true,
-        newmeasure = true;
+  newbeat = true,
+  newbar = true,
+  newmeasure = true;
 
 int previousState = LOW,
-    subdivisions = 64,
-    subdivsPerBeat = 64,
-    beatsPerBar = 3,
-    barsPerMeasure = 4
-                     ;
+  subdivisions = 64,
+  subdivsPerBeat = 64,
+  beatsPerBar = 3,
+  barsPerMeasure = 4
+  ;
 
 volatile int ticks = 1, // these change in timer routines
-             beats = 1,
-             bars = 1
-                    ;
+  beats = 1,
+  bars = 1
+  ;
 
-int LEDs[] =      {3, 5, 7, 8, 9, 13}; // pins that the leds are on
+int LEDs[] = {3, 5, 7, 8, 9, 13}; // pins that the leds are on
+
+int sensors[] = {A0};
+int proximities[size(sensors)];
 
 Pattern patterns[6];
 
 
 void setup()
 {
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < size(LEDs); i++) {
     pinMode(LEDs[i], OUTPUT);
+  }
+
+  for (int i = 0; i < size(sensors); i++) {
+    pinMode(sensors[i], INPUT);
   }
 
   setupTimer();
 
+  Serial.begin(9600);
 
   if (debug) {
-    Serial.begin(9600);
+
 
     int n = size(LEDs);
     Serial.println("--- setup ---");
@@ -83,9 +92,9 @@ void setup()
     Serial.print(size(patterns));
     Serial.println(" patterns total");
     patterns[0].set(LEDs[0], String("10000000"));
-    patterns[1].set(LEDs[1], String("000"));
-    patterns[2].set(LEDs[2], String("000"));
-    patterns[3].set(LEDs[3], String("000"));
+    patterns[1].set(LEDs[1], String("01"));
+    patterns[2].set(LEDs[2], String("000010000"));
+    patterns[3].set(LEDs[3], String("100"));
     patterns[4].set(LEDs[4], String("1000"));
     patterns[5].set(LEDs[5], String("10"));
 
@@ -125,7 +134,7 @@ ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
       bar();
 
       if (bars < barsPerMeasure) bars ++;
-       else {
+      else {
         // new measure (cycle resets)
         newmeasure = true;
         measure();
@@ -138,11 +147,119 @@ ISR(TIMER1_COMPA_vect) { // compare match ISR, occurs when match happens
 
 void loop() {
 
-  /* for (int i = 0; i < 6; i++) { */
-  /* digitalWrite(LEDs[i], ledStates[i]*255); */
-  /* } */
+  readsensors();
+  for (int i = 0; i < size(sensors); i++) {
+    /* Serial.print(proximities[i]); */
+    /* Serial.print('\t'); */
+  }
+  /* Serial.println(); */
 
 }
+
+void readsensors() {
+  float singles[smoothing][size(sensors)];
+  float deviations[smoothing][size(sensors)];
+  float sum, sumDeviation, avg, avgDeviation;
+
+  /* for each sensor */
+  for (int y  = 0; y  < size(sensors); y ++) {
+    if (debug) {
+      Serial.print("s");
+      Serial.print(y);
+      Serial.print("\t");
+    }
+
+    /* gather a bunch of readings, count determined by "smoothing" variable */
+    for (int x = 0; x < smoothing; x++) {
+      /* put reading into "singles" array -- raw data */
+      /* x is reading counter, y is sensor counter  */
+      singles[x][y] = analogRead(sensors[y]);
+
+      if (debug) {
+        Serial.print(singles[x][y]);
+        if(x < smoothing-1) Serial.print("\t");
+      }
+
+      if (x == 0) sum = 0; // reset summation
+
+      // median filter
+      sum += singles[x][y];
+
+      if (x == smoothing-1) { // once we're at last value
+
+        if (debug) {Serial.print("\n");}
+
+        avg = sum / smoothing; // get average
+
+        /* if (debug) { */
+        /*   Serial.print("avg: "); */
+        /*   Serial.print(avg); */
+        /* } */
+
+
+        if (debug) {Serial.print("devs:\t");}
+        for (int read = 0; read < smoothing; read++) {
+          if (read == 0) sumDeviation = 0; // reset sum to begin
+
+          deviations[read][y] = abs(singles[read][y] - avg); // deviation of this sample
+
+
+          if (debug) {
+            Serial.print(deviations[read][y]);
+            Serial.print("\t");
+          }
+
+          sumDeviation += deviations[read][y];
+
+          if (read == smoothing - 1) {
+            avgDeviation = sumDeviation / smoothing; // get avg deviation
+            if (debug) {
+              Serial.print("\tavgDev: ");
+              Serial.print(avgDeviation);
+            }
+
+            int goodcount = 0, goodsum = 0, goodavg = 0;
+
+            if (debug) {Serial.print("\ngood:\t");}
+
+            for (int fr = 0; fr < smoothing; fr++) {
+              if( deviations[fr][y] < avgDeviation ){
+                goodcount++;
+                goodsum += singles[fr][y];
+                if (debug) {
+                  Serial.print(singles[fr][y]);
+                  Serial.print("\t");
+                }
+              }
+
+
+            }
+
+            goodavg = goodsum / goodcount;
+            proximities[y] = goodavg;
+
+            if (debug) {
+              Serial.print("\nFINAL: ");
+              Serial.println(proximities[y]);
+            }
+          }
+
+        }
+      }
+
+
+    }
+
+
+
+
+  }
+  if (debug) {Serial.println();}
+
+}
+
+
+
 void subdiv() {
 
 }
@@ -152,7 +269,7 @@ void beat() {
   for (int p = 0; p < size(patterns); p++) {
     patterns[p].display();
     patterns[p].advance();
- }
+  }
 
 }
 
